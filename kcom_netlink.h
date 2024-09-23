@@ -5,16 +5,16 @@
 #include <net/sock.h>
 #include "kcom_log.h"
 
-struct sock* kcom_nl_open(int type, unsigned int group, void (*cb_on_recv)(struct sk_buff*))
+struct sock* kcom_netlink_open(int protocol_type, unsigned int group, void (*cb_on_recv)(struct sk_buff*))
 {
     struct netlink_kernel_cfg cfg;
     memset(&cfg, 0, sizeof(cfg));
     cfg.input = cb_on_recv;
     cfg.groups = group;
-    return netlink_kernel_create(&init_net, type, &cfg);
+    return netlink_kernel_create(&init_net, protocol_type, &cfg);
 }
 
-void kcom_nl_close(struct sock* sk)
+void kcom_netlink_close(struct sock* sk)
 {
     if(sk != NULL)
     {
@@ -22,7 +22,7 @@ void kcom_nl_close(struct sock* sk)
     }
 }
 
-int kcom_nl_send(struct sock* sk, int remote_id, const unsigned char* data, int data_size)
+int kcom_netlink_send(struct sock* sk, int remote_id, const void* data, int data_size)
 {
     struct sk_buff* skb = NULL;
     struct nlmsghdr* msg = NULL;
@@ -53,7 +53,7 @@ int kcom_nl_send(struct sock* sk, int remote_id, const unsigned char* data, int 
     return nlmsg_unicast(sk, skb, remote_id);//nlmsg_unicast will free skb
 }
 
-int kcom_nl_send_broadcast(struct sock* sk, int group, const unsigned char* data, int data_size)
+int kcom_netlink_send_broadcast(struct sock* sk, int group, const void* data, int data_size)
 {
     struct sk_buff* skb = NULL;
     struct nlmsghdr* msg = NULL;
