@@ -1,6 +1,8 @@
 #ifndef __KCOM_LOG_H__
 #define __KCOM_LOG_H__
 
+#include <linux/printk.h>
+
 #ifndef __FILENAME__
 #define __FILENAME__ (strrchr(__FILE__, '/') ? (strrchr(__FILE__, '/') + 1):__FILE__)
 #endif

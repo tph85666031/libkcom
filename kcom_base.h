@@ -1,6 +1,8 @@
 #ifndef __KCOM_BASE_H__
 #define __KCOM_BASE_H__
 
+#include <linux/dcache.h>
+
 char* kcom_ipv4_to_string(__be32 ip, char* buf, int buf_size)
 {
     if(buf == NULL || buf_size < sizeof("000.000.000.000"))
@@ -35,6 +37,23 @@ __be32 kcom_ipv4_from_string(const char* ipv4_str)
     return val;
 }
 
-#endif /* __KCOM_BASE_H__ */
+char* kcom_file_path_from_path(const struct path* path, const struct dentry* dentry, char* buf, int buf_size)
+{
+    if(path == NULL || dentry == NULL || dentry->d_name.name == NULL || buf == NULL || buf_size <= 0)
+    {
+        return NULL;
+    }
+    int size_name = strlen(dentry->d_name.name) + 1;
+    if(buf_size < size_name)
+    {
+        return NULL;
+    }
+    char* full_path = d_path(path, buf, buf_size - size_name);
+    strcat(full_path, "/");
+    strcat(full_path, dentry->d_name.name);
+    buf[buf_size - 1] = '\0';
+    return full_path;
+}
 
+#endif /* __KCOM_BASE_H__ */
 

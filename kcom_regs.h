@@ -1,7 +1,7 @@
 #ifndef __KCOM_REGS_H__
 #define __KCOM_REGS_H__
 
-inline unsigned long kcom_regs_get_param(struct pt_regs* regs, int n)
+unsigned long kcom_regs_get_param(struct pt_regs* regs, int n)
 {
     switch(n)
     {
@@ -77,7 +77,7 @@ inline unsigned long kcom_regs_get_param(struct pt_regs* regs, int n)
     return 0;
 }
 
-inline void kcom_regs_set_param(struct pt_regs* regs, int n, unsigned long val)
+void kcom_regs_set_param(struct pt_regs* regs, int n, unsigned long val)
 {
     switch(n)
     {
@@ -152,12 +152,12 @@ inline void kcom_regs_set_param(struct pt_regs* regs, int n, unsigned long val)
     }
 }
 
-inline unsigned long kcom_regs_get_return_value(struct pt_regs* regs)
+unsigned long kcom_regs_get_return_value(struct pt_regs* regs)
 {
     return regs_return_value(regs);
 }
 
-inline void kcom_regs_set_return_value(struct pt_regs* regs, unsigned long val)
+void kcom_regs_set_return_value(struct pt_regs* regs, unsigned long val)
 {
     regs_set_return_value(regs, val);
 }
