@@ -3,6 +3,7 @@
 
 #include "kcom_base.h"
 #include "kcom_map.h"
+#include "rapidhash.h"
 
 typedef struct
 {
@@ -20,17 +21,17 @@ uint64_t kcom_hash_string(const char* str)
     {
         return 0;
     }
-    return hashlen_string(NULL, str);
+    return rapidhash(str, strlen(str));
 }
 EXPORT_SYMBOL(kcom_hash_string);
 
-inline uint64_t kcom_hash_data(const void* data, int data_size)
+uint64_t kcom_hash_data(const void* data, int data_size)
 {
     if(unlikely(data == NULL || data_size <= 0))
     {
         return 0;
     }
-    return hashlen_create(full_name_hash(NULL, data, data_size), data_size);
+    return rapidhash(data, data_size);
 }
 EXPORT_SYMBOL(kcom_hash_data);
 
