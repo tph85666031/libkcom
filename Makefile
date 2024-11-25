@@ -1,5 +1,5 @@
 MODULE_NAME = libkcom
-EXTRA_CFLAGS += -I$(PWD) $(CFLAG)
+EXTRA_CFLAGS += -I$(PWD) $(CFLAG) -g
 KBUILD_CFLAGS += -Wno-declaration-after-statement
 
 MODULE_SRC := $(notdir $(wildcard $(PWD)/*.c))

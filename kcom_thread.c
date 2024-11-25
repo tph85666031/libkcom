@@ -1,6 +1,5 @@
 #include <linux/sched.h>
 #include <linux/sched/mm.h>
-#include <linux/sched/task.h>
 #include <linux/version.h>
 #include <linux/atomic.h>
 #include <linux/fs.h>
@@ -17,7 +16,19 @@ char* kcom_process_get_path(struct task_struct* task, char* buf, int buf_size)
         return NULL;
     }
 
-    struct mm_struct* mm = get_task_mm(task);
+    struct mm_struct* mm;
+    if(unlikely(spin_is_locked(&task->alloc_lock)))
+    {
+        mm = task->mm;
+        if(mm != NULL)
+        {
+            mmget(mm);
+        }
+    }
+    else
+    {
+        mm = get_task_mm(task);
+    }
     if(unlikely(mm == NULL))
     {
         return NULL;
@@ -43,37 +54,6 @@ char* kcom_process_get_path(struct task_struct* task, char* buf, int buf_size)
     return file_app;
 }
 EXPORT_SYMBOL(kcom_process_get_path);
-
-char* kcom_process_get_path_by_pid(int pid, char* buf, int buf_size)
-{
-    if(unlikely(buf == NULL || buf_size <= 0))
-    {
-        return NULL;
-    }
-    struct task_struct* task = NULL;
-    if(pid <= 0)
-    {
-        task = current;
-        get_task_struct(task);
-    }
-    else
-    {
-        rcu_read_lock();
-        task = pid_task(find_vpid(pid), PIDTYPE_PID);
-        if(unlikely(task == NULL))
-        {
-            rcu_read_unlock();
-            return NULL;
-        }
-        get_task_struct(task);
-        rcu_read_unlock();
-    }
-
-    char* file_path = kcom_process_get_path(task, buf, buf_size);
-    put_task_struct(task);
-    return file_path;
-}
-EXPORT_SYMBOL(kcom_process_get_path_by_pid);
 
 char* kcom_process_get_name(struct task_struct* task, char* buf, int buf_size)
 {
@@ -103,35 +83,19 @@ char* kcom_process_get_name(struct task_struct* task, char* buf, int buf_size)
 }
 EXPORT_SYMBOL(kcom_process_get_name);
 
-char* kcom_process_get_name_by_pid(int pid, char* buf, int buf_size)
+struct task_struct* kcom_find_get_task_by_vpid(pid_t pid)
 {
-    if(unlikely(buf == NULL || buf_size <= 0))
-    {
-        return NULL;
-    }
-    
-    struct task_struct* task = NULL;
-    if(pid <= 0)
-    {
-        task = current;
-        get_task_struct(task);
-    }
-    else
-    {
-        rcu_read_lock();
-        task = pid_task(find_vpid(pid), PIDTYPE_PID);
-        if(unlikely(task == NULL))
-        {
-            rcu_read_unlock();
-            return NULL;
-        }
-        get_task_struct(task);
-        rcu_read_unlock();
-    }
+    struct task_struct* task;
 
-    char* file_name = kcom_process_get_name(task, buf, buf_size);
-    put_task_struct(task);
-    return file_name;
+    rcu_read_lock();
+    task = pid_task(find_vpid(pid), PIDTYPE_PID);
+    if(task)
+    {
+        get_task_struct(task);
+    }
+    rcu_read_unlock();
+
+    return task;
 }
-EXPORT_SYMBOL(kcom_process_get_name_by_pid);
+EXPORT_SYMBOL(kcom_find_get_task_by_vpid);
 
