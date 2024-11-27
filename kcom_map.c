@@ -155,7 +155,8 @@ int64_t kcom_map_get_int64(KCOM_MAP* map, uint64_t key, int64_t default_val)
     {
         if(node->key_u64 == key && node->data_size == sizeof(int64_t))
         {
-            int64_t value = *((int64_t*)(node->data + node->key_size));
+            int64_t value;
+            memcpy(&value, node->data, sizeof(int64_t));
             rcu_read_unlock();
             return value;
         }
@@ -326,7 +327,8 @@ int64_t kcom_maps_get_int64(KCOM_MAP* map, const char* key, int64_t default_val)
     {
         if(node->data_size == sizeof(int64_t) && (memcmp(node->data, key, node->key_size) == 0))
         {
-            int64_t value = *((int64_t*)(node->data + node->key_size));
+            int64_t value;
+            memcpy(&value, node->data + node->key_size, sizeof(int64_t));
             rcu_read_unlock();
             return value;
         }

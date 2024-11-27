@@ -1,8 +1,10 @@
 #include <linux/sched.h>
+#include <linux/mm.h>
 #include <linux/sched/mm.h>
 #include <linux/version.h>
 #include <linux/atomic.h>
 #include <linux/fs.h>
+#include <linux/file.h>
 #include <linux/pid.h>
 
 #include "kcom_base.h"
@@ -15,7 +17,9 @@ char* kcom_process_get_path(struct task_struct* task, char* buf, int buf_size)
     {
         return NULL;
     }
-
+#if 1
+    return strncpy(buf, task->comm, buf_size);
+#else
     struct mm_struct* mm;
     if(unlikely(spin_is_locked(&task->alloc_lock)))
     {
@@ -29,7 +33,7 @@ char* kcom_process_get_path(struct task_struct* task, char* buf, int buf_size)
     {
         mm = get_task_mm(task);
     }
-    if(unlikely(mm == NULL))
+    if(mm == NULL)
     {
         return NULL;
     }
@@ -40,9 +44,11 @@ char* kcom_process_get_path(struct task_struct* task, char* buf, int buf_size)
 #else
     mmap_read_lock(mm);
 #endif
-    if(likely(mm->exe_file))
+    struct file* exe_file = get_mm_exe_file(mm);
+    if(!IS_ERR_OR_NULL(exe_file))
     {
-        file_app = kcom_path_from_struct_path(&mm->exe_file->f_path, buf, buf_size);
+        file_app = kcom_path_from_struct_path(&exe_file->f_path, buf, buf_size);
+        fput(exe_file);
     }
 #if LINUX_VERSION_CODE<KERNEL_VERSION(5,8,0)
     up_read(&mm->mmap_sem);
@@ -52,6 +58,7 @@ char* kcom_process_get_path(struct task_struct* task, char* buf, int buf_size)
     mmput(mm);
 
     return file_app;
+#endif
 }
 EXPORT_SYMBOL(kcom_process_get_path);
 
@@ -65,21 +72,13 @@ char* kcom_process_get_name(struct task_struct* task, char* buf, int buf_size)
     {
         return strncpy(buf, task->comm, buf_size);
     }
+
     char* file_path = kcom_process_get_path(task, buf, buf_size);
     if(file_path == NULL)
     {
         return strncpy(buf, task->comm, buf_size);
     }
-    char* file_name = file_path;
-    while(*file_path != '\0')
-    {
-        if(*file_path == '/')
-        {
-            file_name = file_path + 1;
-        }
-        file_path++;
-    }
-    return file_name;
+    return (char*)kbasename(file_path);
 }
 EXPORT_SYMBOL(kcom_process_get_name);
 
