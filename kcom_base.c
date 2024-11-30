@@ -246,6 +246,7 @@ char* kcom_path_from_struct_path(const struct path* path, char* buf, int buf_siz
         KLOG_D("failed,error=%ld", PTR_ERR(val));
         return NULL;
     }
+    buf[buf_size - 1] = '\0';
     return val;
 }
 EXPORT_SYMBOL(kcom_path_from_struct_path);
@@ -262,6 +263,7 @@ char* kcom_path_from_struct_dentry(const struct dentry* dentry, char* buf, int b
         KLOG_D("failed,error=%ld", PTR_ERR(val));
         return NULL;
     }
+    buf[buf_size - 1] = '\0';
     return val;
 }
 EXPORT_SYMBOL(kcom_path_from_struct_dentry);

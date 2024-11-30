@@ -5,16 +5,6 @@
 #include "kcom_map.h"
 #include "rapidhash.h"
 
-typedef struct
-{
-    struct hlist_node node;
-    struct rcu_head rcu;
-    uint64_t key_u64;
-    int key_size;
-    int data_size;
-    char data[0];
-} KCOM_HASH_NODE;
-
 uint64_t kcom_hash_string(const char* str)
 {
     if(unlikely(str == NULL))
@@ -41,7 +31,7 @@ KCOM_MAP* kcom_map_create(int hash_count)
     {
         hash_count = 16;
     }
-    KCOM_MAP* map = (KCOM_MAP*)kzalloc(sizeof(KCOM_MAP) + sizeof(struct hlist_head) * hash_count, GFP_KERNEL);
+    KCOM_MAP* map = (KCOM_MAP*)kzalloc(sizeof(KCOM_MAP) + sizeof(struct hlist_head) * hash_count, GFP_NOWAIT);
     if(unlikely(map == NULL))
     {
         return NULL;
@@ -68,11 +58,47 @@ void kcom_map_remove(KCOM_MAP* map, uint64_t key)
         {
             hash_del_rcu(&node->node);
             kfree_rcu(node, rcu);
+            atomic_dec(&map->item_count);
         }
     }
     spin_unlock(&map->lock);
 }
 EXPORT_SYMBOL(kcom_map_remove);
+
+void kcom_map_remove_value(KCOM_MAP* map, uint64_t key, const void* value, int value_size)
+{
+    if(unlikely(map == NULL || value == NULL || value_size <= 0))
+    {
+        return;
+    }
+    KCOM_HASH_NODE* node = NULL;
+    spin_lock(&map->lock);
+    struct hlist_head* head = &map->heads[hash_min(key, ilog2(map->head_count))];
+    hlist_for_each_entry_rcu(node, head, node)
+    {
+        if(node->key_u64 == key
+                && node->data_size == value_size
+                && memcmp(node->data, value, value_size) == 0)
+        {
+            hash_del_rcu(&node->node);
+            kfree_rcu(node, rcu);
+            atomic_dec(&map->item_count);
+            break;
+        }
+    }
+    spin_unlock(&map->lock);
+}
+EXPORT_SYMBOL(kcom_map_remove_value);
+
+int kcom_map_count(KCOM_MAP* map)
+{
+    if(map == NULL)
+    {
+        return -1;
+    }
+    return atomic_read(&map->item_count);
+}
+EXPORT_SYMBOL(kcom_map_count);
 
 bool kcom_map_add(KCOM_MAP* map, uint64_t key, const void* value, int value_size)
 {
@@ -80,16 +106,18 @@ bool kcom_map_add(KCOM_MAP* map, uint64_t key, const void* value, int value_size
     {
         return false;
     }
-    KCOM_HASH_NODE* node = kzalloc(sizeof(KCOM_HASH_NODE) + value_size, GFP_KERNEL);
+    KCOM_HASH_NODE* node = kzalloc(sizeof(KCOM_HASH_NODE) + value_size, GFP_NOWAIT);
     if(unlikely(node == NULL))
     {
         return false;
     }
+    kcom_map_remove_value(map, key, value, value_size);
     node->key_u64 = key;
     node->data_size = value_size;
     memcpy(node->data, value, value_size);
     spin_lock(&map->lock);
     hlist_add_tail_rcu(&node->node, &map->heads[hash_min(key, ilog2(map->head_count))]);
+    atomic_inc(&map->item_count);
     spin_unlock(&map->lock);
     return true;
 }
@@ -106,6 +134,53 @@ bool kcom_map_add_int64(KCOM_MAP* map, uint64_t key, int64_t value)
     return kcom_map_add(map, key, &value, sizeof(value));
 }
 EXPORT_SYMBOL(kcom_map_add_int64);
+
+void kcom_map_iterator_init(KCOM_MAP_ITERATOR* it, KCOM_MAP* map)
+{
+    if(it != NULL && map != NULL)
+    {
+        it->map = map;
+        it->head_pos = 0;
+        it->node = NULL;
+    }
+}
+EXPORT_SYMBOL(kcom_map_iterator_init);
+
+bool kcom_map_iterator_next_rcu(KCOM_MAP_ITERATOR* it, uint64_t* key, void** value, int* value_size)
+{
+    if(unlikely(it == NULL || it->map == NULL || it->head_pos < 0 || key == NULL || value == NULL || value_size == NULL))
+    {
+        return false;
+    }
+    for(; it->head_pos < it->map->head_count;)
+    {
+        if(it->node == NULL)
+        {
+            hlist_for_each_entry_rcu(it->node, &it->map->heads[it->head_pos], node)
+            {
+                *key = it->node->key_u64;
+                *value = it->node->data + it->node->key_size;
+                *value_size = it->node->data_size;
+                return true;
+            }
+            it->head_pos++;
+        }
+        else
+        {
+            hlist_for_each_entry_continue_rcu(it->node, node)
+            {
+                *key = it->node->key_u64;
+                *value = it->node->data + it->node->key_size;
+                *value_size = it->node->data_size;
+                return true;
+            }
+            it->head_pos++;
+        }
+    }
+
+    return false;
+}
+EXPORT_SYMBOL(kcom_map_iterator_next_rcu);
 
 void* kcom_map_get_rcu(KCOM_MAP* map, uint64_t key, void* default_val)
 {
@@ -142,6 +217,28 @@ void* kcom_map_get_rcu_next(void* pre_value, uint64_t key, void* default_val)
     return default_val;
 }
 EXPORT_SYMBOL(kcom_map_get_rcu_next);
+
+void* kcom_map_get_copy(KCOM_MAP* map, uint64_t key, void* buf, int buf_size, void* default_val)
+{
+    if(unlikely(map == NULL || buf == NULL || buf_size <= 0))
+    {
+        return default_val;
+    }
+
+    KCOM_HASH_NODE* node = NULL;
+    rcu_read_lock();
+    hlist_for_each_entry_rcu(node, &map->heads[hash_min(key, ilog2(map->head_count))], node)
+    {
+        if(node->key_u64 == key)
+        {
+            memcpy(buf, node->data, min(buf_size, node->data_size));
+            break;
+        }
+    }
+    rcu_read_unlock();
+    return buf;
+}
+EXPORT_SYMBOL(kcom_map_get_copy);
 
 int64_t kcom_map_get_int64(KCOM_MAP* map, uint64_t key, int64_t default_val)
 {
@@ -187,6 +284,29 @@ bool kcom_map_exist(KCOM_MAP* map, uint64_t key)
 }
 EXPORT_SYMBOL(kcom_map_exist);
 
+bool kcom_map_exist_value(KCOM_MAP* map, uint64_t key, const void* value, int value_size)
+{
+    if(unlikely(map == NULL || value == NULL || value_size <= 0))
+    {
+        return NULL;
+    }
+    KCOM_HASH_NODE* node = NULL;
+    rcu_read_lock();
+    hlist_for_each_entry_rcu(node, &map->heads[hash_min(key, ilog2(map->head_count))], node)
+    {
+        if(node->key_u64 == key
+                && node->data_size == value_size
+                && memcmp(node->data, value, value_size) == 0)
+        {
+            rcu_read_unlock();
+            return true;
+        }
+    }
+    rcu_read_unlock();
+    return false;
+}
+EXPORT_SYMBOL(kcom_map_exist_value);
+
 void kcom_map_clear(KCOM_MAP* map)
 {
     if(unlikely(map == NULL))
@@ -204,6 +324,7 @@ void kcom_map_clear(KCOM_MAP* map)
             kfree_rcu(node, rcu);
         }
     }
+    atomic_set(&map->item_count, 0);
     spin_unlock(&map->lock);
 }
 EXPORT_SYMBOL(kcom_map_clear);
@@ -233,11 +354,37 @@ void kcom_maps_remove(KCOM_MAP* map, const char* key)
         {
             hash_del_rcu(&node->node);
             kfree_rcu(node, rcu);
+            atomic_dec(&map->item_count);
         }
     }
     spin_unlock(&map->lock);
 }
 EXPORT_SYMBOL(kcom_maps_remove);
+
+void kcom_maps_remove_value(KCOM_MAP* map, const char* key, const void* value, int value_size)
+{
+    if(unlikely(map == NULL || key == NULL || value == NULL || value_size <= 0))
+    {
+        return;
+    }
+    KCOM_HASH_NODE* node = NULL;
+    spin_lock(&map->lock);
+    struct hlist_head* head = &map->heads[hash_min(kcom_hash_string(key), ilog2(map->head_count))];
+    hlist_for_each_entry_rcu(node, head, node)
+    {
+        if(memcmp(key, node->data, node->key_size) == 0
+                && node->data_size == value_size
+                && memcmp(node->data + node->key_size, value, value_size) == 0)
+        {
+            hash_del_rcu(&node->node);
+            kfree_rcu(node, rcu);
+            atomic_dec(&map->item_count);
+            break;
+        }
+    }
+    spin_unlock(&map->lock);
+}
+EXPORT_SYMBOL(kcom_maps_remove_value);
 
 bool kcom_maps_add(KCOM_MAP* map, const char* key, const void* value, int value_size)
 {
@@ -246,17 +393,19 @@ bool kcom_maps_add(KCOM_MAP* map, const char* key, const void* value, int value_
         return false;
     }
     int key_size = strlen(key) + 1;
-    KCOM_HASH_NODE* node = kzalloc(sizeof(KCOM_HASH_NODE) + key_size + value_size, GFP_KERNEL);
+    KCOM_HASH_NODE* node = kzalloc(sizeof(KCOM_HASH_NODE) + key_size + value_size, GFP_NOWAIT);
     if(unlikely(node == NULL))
     {
         return false;
     }
+    kcom_maps_remove_value(map, key, value, value_size);
     node->key_size = key_size;
     node->data_size = value_size;
     memcpy(node->data, key, key_size);
     memcpy(node->data + key_size, value, value_size);
     spin_lock(&map->lock);
     hlist_add_tail_rcu(&node->node, &map->heads[hash_min(kcom_hash_data(key, key_size - 1), ilog2(map->head_count))]);
+    atomic_inc(&map->item_count);
     spin_unlock(&map->lock);
     return true;
 }
@@ -315,6 +464,27 @@ void* kcom_maps_get_rcu_next(void* pre_value, const char* key, void* default_val
 }
 EXPORT_SYMBOL(kcom_maps_get_rcu_next);
 
+void* kcom_maps_get_copy(KCOM_MAP* map, const char* key, void* buf, int buf_size, void* default_val)
+{
+    if(unlikely(map == NULL || key == NULL || buf == NULL || buf_size <= 0))
+    {
+        return default_val;
+    }
+    KCOM_HASH_NODE* node = NULL;
+    rcu_read_lock();
+    hlist_for_each_entry_rcu(node, &map->heads[hash_min(kcom_hash_string(key), ilog2(map->head_count))], node)
+    {
+        if(memcmp(node->data, key, node->key_size) == 0)
+        {
+            memcpy(buf, node->data + node->key_size, min(buf_size, node->data_size));
+            break;
+        }
+    }
+    rcu_read_unlock();
+    return buf;
+}
+EXPORT_SYMBOL(kcom_maps_get_copy);
+
 int64_t kcom_maps_get_int64(KCOM_MAP* map, const char* key, int64_t default_val)
 {
     if(unlikely(map == NULL || key == NULL))
@@ -358,4 +528,63 @@ bool kcom_maps_exist(KCOM_MAP* map, const char* key)
     return false;
 }
 EXPORT_SYMBOL(kcom_maps_exist);
+
+bool kcom_maps_exist_value(KCOM_MAP* map, const char* key, const void* value, int value_size)
+{
+    if(unlikely(map == NULL || key == NULL || value == NULL || value_size <= 0))
+    {
+        return NULL;
+    }
+    KCOM_HASH_NODE* node = NULL;
+    rcu_read_lock();
+    hlist_for_each_entry_rcu(node, &map->heads[hash_min(kcom_hash_string(key), ilog2(map->head_count))], node)
+    {
+        if(memcmp(node->data, key, node->key_size) == 0
+                && node->data_size == value_size
+                && memcmp(node->data + node->key_size, value, value_size) == 0)
+        {
+            rcu_read_unlock();
+            return true;
+        }
+    }
+    rcu_read_unlock();
+    return false;
+}
+EXPORT_SYMBOL(kcom_maps_exist_value);
+
+bool kcom_maps_iterator_next_rcu(KCOM_MAP_ITERATOR* it, const char** key, void** value, int* value_size)
+{
+    if(unlikely(it == NULL || it->map == NULL || it->head_pos < 0 || key == NULL || value == NULL || value_size == NULL))
+    {
+        return false;
+    }
+    for(; it->head_pos < it->map->head_count;)
+    {
+        if(it->node == NULL)
+        {
+            hlist_for_each_entry_rcu(it->node, &it->map->heads[it->head_pos], node)
+            {
+                *key = it->node->data;
+                *value = it->node->data + it->node->key_size;
+                *value_size = it->node->data_size;
+                return true;
+            }
+            it->head_pos++;
+        }
+        else
+        {
+            hlist_for_each_entry_continue_rcu(it->node, node)
+            {
+                *key = it->node->data;
+                *value = it->node->data + it->node->key_size;
+                *value_size = it->node->data_size;
+                return true;
+            }
+            it->head_pos++;
+        }
+    }
+
+    return false;
+}
+EXPORT_SYMBOL(kcom_maps_iterator_next_rcu);
 

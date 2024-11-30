@@ -31,7 +31,7 @@ int kcom_netlink_send(struct sock* sk, int remote_id, const void* data, int data
         return -1;
     }
 
-    skb = nlmsg_new(data_size, 0);
+    skb = nlmsg_new(data_size, GFP_NOWAIT);
     if(skb == NULL)
     {
         KLOG_E("nlmsg_new failed");
@@ -63,7 +63,7 @@ int kcom_netlink_send_broadcast(struct sock* sk, int group, const void* data, in
         return -1;
     }
 
-    skb = nlmsg_new(data_size, 0);
+    skb = nlmsg_new(data_size, GFP_NOWAIT);
     if(skb == NULL)
     {
         KLOG_E("nlmsg_new failed");
@@ -81,7 +81,7 @@ int kcom_netlink_send_broadcast(struct sock* sk, int group, const void* data, in
     NETLINK_CB(skb).portid = 0;//sender
     NETLINK_CB(skb).dst_group = group;
     memcpy(nlmsg_data(msg), data, data_size);
-    return netlink_broadcast(sk, skb, 0, group, GFP_ATOMIC); //netlink_broadcast will free skb
+    return netlink_broadcast(sk, skb, 0, group, GFP_NOWAIT); //netlink_broadcast will free skb
 }
 EXPORT_SYMBOL(kcom_netlink_send_broadcast);
 
