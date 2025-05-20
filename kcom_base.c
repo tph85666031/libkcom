@@ -1,6 +1,8 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/ctype.h>
+#include <linux/in.h>
+#include <linux/in6.h>
 
 #include "kcom_base.h"
 #include "kcom_log.h"
@@ -191,6 +193,50 @@ __be32 kcom_ipv4_from_string(const char* ipv4_str)
 }
 EXPORT_SYMBOL(kcom_ipv4_from_string);
 
+char* kcom_sockaddr_storage_to_string(const struct sockaddr_storage* addr, char* buf, int buf_size)
+{
+    if(addr == NULL || buf == NULL || buf_size <= 0)
+    {
+        return NULL;
+    }
+    if(addr->ss_family == AF_INET)
+    {
+        struct sockaddr_in* addr_from_ipv4 = (struct sockaddr_in*)addr;
+        int ret = snprintf(buf, buf_size, "%d.%d.%d.%d:%d",
+                           addr_from_ipv4->sin_addr.s_addr & 0xFF,
+                           (addr_from_ipv4->sin_addr.s_addr >> 8) & 0xFF,
+                           (addr_from_ipv4->sin_addr.s_addr >> 16) & 0xFF,
+                           (addr_from_ipv4->sin_addr.s_addr >> 24) & 0xFF,
+                           ntohs(addr_from_ipv4->sin_port));
+        if(ret <= 0)
+        {
+            return NULL;
+        }
+        return buf;
+    }
+    else if(addr->ss_family == AF_INET6)
+    {
+        struct sockaddr_in6* addr_from_ipv6 = (struct sockaddr_in6*)addr;
+        int ret = snprintf(buf, buf_size, "[%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x]:%d",
+                           addr_from_ipv6->sin6_addr.s6_addr[0],
+                           addr_from_ipv6->sin6_addr.s6_addr[1],
+                           addr_from_ipv6->sin6_addr.s6_addr[2],
+                           addr_from_ipv6->sin6_addr.s6_addr[3],
+                           addr_from_ipv6->sin6_addr.s6_addr[4],
+                           addr_from_ipv6->sin6_addr.s6_addr[5],
+                           addr_from_ipv6->sin6_addr.s6_addr[6],
+                           addr_from_ipv6->sin6_addr.s6_addr[7],
+                           ntohs(addr_from_ipv6->sin6_port));
+        if(ret <= 0)
+        {
+            return NULL;
+        }
+        return buf;
+    }
+    return NULL;
+}
+EXPORT_SYMBOL(kcom_sockaddr_storage_to_string);
+
 char* kcom_strdup(char* str)
 {
     if(str == NULL || str[0] == '\0')
@@ -198,7 +244,7 @@ char* kcom_strdup(char* str)
         return NULL;
     }
 
-    char* buf = (char*)kmalloc(strlen(str) + 1, GFP_KERNEL);
+    char* buf = (char*)kmalloc(strlen(str) + 1, GFP_ATOMIC);
     if(buf == NULL)
     {
         return NULL;
@@ -257,7 +303,7 @@ char* kcom_path_from_struct_dentry(const struct dentry* dentry, char* buf, int b
     {
         return NULL;
     }
-    char* val = dentry_path_raw(dentry, buf, buf_size);
+    char* val = dentry_path_raw((struct dentry*)dentry, buf, buf_size);
     if(IS_ERR(val))
     {
         KLOG_D("failed,error=%ld", PTR_ERR(val));

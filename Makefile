@@ -1,5 +1,5 @@
 MODULE_NAME = libkcom
-EXTRA_CFLAGS += -I$(PWD) $(CFLAG) -g
+EXTRA_CFLAGS += -I$(PWD) $(CFLAG)
 KBUILD_CFLAGS += -Wno-declaration-after-statement
 
 MODULE_SRC := $(notdir $(wildcard $(PWD)/*.c))
@@ -10,6 +10,7 @@ $(MODULE_NAME)-objs := $(MODULE_OBJ)
 
 all: 
 	@echo objs=$($(MODULE_NAME)-objs)
+	@echo cc=$(CC)
 	@-mkdir -p $(PWD)/out > /dev/null 2>&1
 	@-touch $(PWD)/out/Makefile > /dev/null 2>&1
 	make -C /lib/modules/$(shell uname -r)/build M=$(PWD)/out src=$(PWD) modules

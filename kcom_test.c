@@ -1,9 +1,13 @@
+#include <linux/slab.h>
 #include <linux/module.h>
 #include <linux/kthread.h>
 #include <linux/sched/task.h>
 
 #include "kcom_map.h"
+#include "kcom_crypto.h"
 #include "kcom_log.h"
+
+#define __UNIT_TEST__
 
 #ifdef __UNIT_TEST__
 static KCOM_MAP* map_1 = NULL;
@@ -16,6 +20,25 @@ static int thread_test_1(void* ctx)
     KCOM_MAP* map = (KCOM_MAP*)ctx;
     int i;
     char buf[16];
+    if(strcmp(get_current()->comm, "thread 1") == 0)
+    {
+        const char* key = "0123456789012345";
+        const char* iv = "0123456789012345";
+        const char* buf_in = "0123456789012345";
+        //u8 buf_out[128] = {0};
+        u8* buf_out = kmalloc(128, GFP_KERNEL);
+
+        //int result_size = kcom_crypto_hash("md5", buf_in, strlen(buf_in), buf_out, sizeof(buf_out));
+        int result_size = kcom_crypto_encrypt("cbc(aes)", key, 16, iv, 16, buf_in, 16, buf_out, 128);
+        int str_size = 0;
+        char str_buf[256] = {0};
+        for(i = 0; i < result_size; i++)
+        {
+            str_size += snprintf(str_buf + str_size, sizeof(str_buf) - str_size, "%x ", buf_out[i]);
+        }
+        KLOG_I("result=%s", str_buf);
+        kfree(buf_out);
+    }
     if(strcmp(get_current()->comm, "thread 9") == 0)
     {
         for(i = 0; i < 100000 && !kthread_should_stop(); i += 3)
@@ -69,7 +92,6 @@ static int thread_test_2(void* ctx)
 static int __init kcom_unit_test_init(void)
 {
     KLOG_I("called");
-
     memset(threads_1, 0, sizeof(threads_1));
     memset(threads_2, 0, sizeof(threads_2));
     map_1 = kcom_map_create(1024);

@@ -33,14 +33,16 @@ uint64_t kcom_hash_string(const char* str);
 uint64_t kcom_hash_data(const void* data, int data_size);
 
 /*
-create a map
-hash_count: 
-return: map handle
+    create a map
+    hash_count:
+    return: map handle
 */
 KCOM_MAP* kcom_map_create(int hash_count);
 void kcom_map_clear(KCOM_MAP* map);
 void kcom_map_destroy(KCOM_MAP* map);
 int kcom_map_count(KCOM_MAP* map);
+void kcom_map_lock(KCOM_MAP* map);
+void kcom_map_unlock(KCOM_MAP* map);
 
 //key is uint64_t
 void kcom_map_remove(KCOM_MAP* map, uint64_t key);

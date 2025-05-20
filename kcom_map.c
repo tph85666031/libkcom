@@ -43,6 +43,26 @@ KCOM_MAP* kcom_map_create(int hash_count)
 }
 EXPORT_SYMBOL(kcom_map_create);
 
+void kcom_map_lock(KCOM_MAP* map)
+{
+    if(unlikely(map == NULL))
+    {
+        return;
+    }
+    spin_lock(&map->lock);
+}
+EXPORT_SYMBOL(kcom_map_lock);
+
+void kcom_map_unlock(KCOM_MAP* map)
+{
+    if(unlikely(map == NULL))
+    {
+        return;
+    }
+    spin_unlock(&map->lock);
+}
+EXPORT_SYMBOL(kcom_map_unlock);
+
 void kcom_map_remove(KCOM_MAP* map, uint64_t key)
 {
     if(unlikely(map == NULL))
