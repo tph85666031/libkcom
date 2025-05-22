@@ -9,7 +9,7 @@ typedef struct
     spinlock_t lock;
     atomic_t item_count;
     int head_count;
-    struct hlist_head heads[0];
+    struct hlist_head heads[];
 } KCOM_MAP;
 
 typedef struct
@@ -19,8 +19,18 @@ typedef struct
     uint64_t key_u64;
     int key_size;
     int data_size;
-    char data[0];
+    char data[];
 } KCOM_HASH_NODE;
+
+typedef struct
+{
+    struct hlist_node node;
+    struct rcu_head rcu;
+    uint64_t key_u64;
+    int key_size;
+    int data_size;
+    char data[0];
+} KCOM_HASH_NODEX;
 
 typedef struct
 {

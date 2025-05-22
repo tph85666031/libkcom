@@ -71,7 +71,7 @@ void kcom_map_remove(KCOM_MAP* map, uint64_t key)
     }
     KCOM_HASH_NODE* node = NULL;
     spin_lock(&map->lock);
-    struct hlist_head* head = &map->heads[hash_min(key, ilog2(map->head_count))];
+    struct hlist_head* head = &map->heads[key % map->head_count];
     hlist_for_each_entry_rcu(node, head, node)
     {
         if(node->key_u64 == key)
@@ -93,7 +93,7 @@ void kcom_map_remove_value(KCOM_MAP* map, uint64_t key, const void* value, int v
     }
     KCOM_HASH_NODE* node = NULL;
     spin_lock(&map->lock);
-    struct hlist_head* head = &map->heads[hash_min(key, ilog2(map->head_count))];
+    struct hlist_head* head = &map->heads[key % map->head_count];
     hlist_for_each_entry_rcu(node, head, node)
     {
         if(node->key_u64 == key
@@ -136,7 +136,7 @@ bool kcom_map_add(KCOM_MAP* map, uint64_t key, const void* value, int value_size
     node->data_size = value_size;
     memcpy(node->data, value, value_size);
     spin_lock(&map->lock);
-    hlist_add_tail_rcu(&node->node, &map->heads[hash_min(key, ilog2(map->head_count))]);
+    hlist_add_tail_rcu(&node->node, &map->heads[key % map->head_count]);
     atomic_inc(&map->item_count);
     spin_unlock(&map->lock);
     return true;
@@ -209,7 +209,7 @@ void* kcom_map_get_rcu(KCOM_MAP* map, uint64_t key, void* default_val)
         return default_val;
     }
     KCOM_HASH_NODE* node = NULL;
-    hlist_for_each_entry_rcu(node, &map->heads[hash_min(key, ilog2(map->head_count))], node)
+    hlist_for_each_entry_rcu(node, &map->heads[key % map->head_count], node)
     {
         if(node->key_u64 == key)
         {
@@ -247,7 +247,7 @@ void* kcom_map_get_copy(KCOM_MAP* map, uint64_t key, void* buf, int buf_size, vo
 
     KCOM_HASH_NODE* node = NULL;
     rcu_read_lock();
-    hlist_for_each_entry_rcu(node, &map->heads[hash_min(key, ilog2(map->head_count))], node)
+    hlist_for_each_entry_rcu(node, &map->heads[key % map->head_count], node)
     {
         if(node->key_u64 == key)
         {
@@ -268,7 +268,7 @@ int64_t kcom_map_get_int64(KCOM_MAP* map, uint64_t key, int64_t default_val)
     }
     KCOM_HASH_NODE* node = NULL;
     rcu_read_lock();
-    hlist_for_each_entry_rcu(node, &map->heads[hash_min(key, ilog2(map->head_count))], node)
+    hlist_for_each_entry_rcu(node, &map->heads[key % map->head_count], node)
     {
         if(node->key_u64 == key && node->data_size == sizeof(int64_t))
         {
@@ -291,7 +291,7 @@ bool kcom_map_exist(KCOM_MAP* map, uint64_t key)
     }
     KCOM_HASH_NODE* node = NULL;
     rcu_read_lock();
-    hlist_for_each_entry_rcu(node, &map->heads[hash_min(key, ilog2(map->head_count))], node)
+    hlist_for_each_entry_rcu(node, &map->heads[key % map->head_count], node)
     {
         if(node->key_u64 == key)
         {
@@ -312,7 +312,7 @@ bool kcom_map_exist_value(KCOM_MAP* map, uint64_t key, const void* value, int va
     }
     KCOM_HASH_NODE* node = NULL;
     rcu_read_lock();
-    hlist_for_each_entry_rcu(node, &map->heads[hash_min(key, ilog2(map->head_count))], node)
+    hlist_for_each_entry_rcu(node, &map->heads[key % map->head_count], node)
     {
         if(node->key_u64 == key
                 && node->data_size == value_size
@@ -367,7 +367,7 @@ void kcom_maps_remove(KCOM_MAP* map, const char* key)
     }
     KCOM_HASH_NODE* node = NULL;
     spin_lock(&map->lock);
-    struct hlist_head* head = &map->heads[hash_min(kcom_hash_string(key), ilog2(map->head_count))];
+    struct hlist_head* head = &map->heads[kcom_hash_string(key) % map->head_count];
     hlist_for_each_entry_rcu(node, head, node)
     {
         if(memcmp(key, node->data, node->key_size) == 0)
@@ -389,7 +389,7 @@ void kcom_maps_remove_value(KCOM_MAP* map, const char* key, const void* value, i
     }
     KCOM_HASH_NODE* node = NULL;
     spin_lock(&map->lock);
-    struct hlist_head* head = &map->heads[hash_min(kcom_hash_string(key), ilog2(map->head_count))];
+    struct hlist_head* head = &map->heads[kcom_hash_string(key) % map->head_count];
     hlist_for_each_entry_rcu(node, head, node)
     {
         if(memcmp(key, node->data, node->key_size) == 0
@@ -424,7 +424,7 @@ bool kcom_maps_add(KCOM_MAP* map, const char* key, const void* value, int value_
     memcpy(node->data, key, key_size);
     memcpy(node->data + key_size, value, value_size);
     spin_lock(&map->lock);
-    hlist_add_tail_rcu(&node->node, &map->heads[hash_min(kcom_hash_data(key, key_size - 1), ilog2(map->head_count))]);
+    hlist_add_tail_rcu(&node->node, &map->heads[kcom_hash_string(key) % map->head_count]);
     atomic_inc(&map->item_count);
     spin_unlock(&map->lock);
     return true;
@@ -450,7 +450,7 @@ void* kcom_maps_get_rcu(KCOM_MAP* map, const char* key, void* default_val)
         return default_val;
     }
     KCOM_HASH_NODE* node = NULL;
-    hlist_for_each_entry_rcu(node, &map->heads[hash_min(kcom_hash_string(key), ilog2(map->head_count))], node)
+    hlist_for_each_entry_rcu(node, &map->heads[kcom_hash_string(key) % map->head_count], node)
     {
         if(memcmp(node->data, key, node->key_size) == 0)
         {
@@ -492,7 +492,7 @@ void* kcom_maps_get_copy(KCOM_MAP* map, const char* key, void* buf, int buf_size
     }
     KCOM_HASH_NODE* node = NULL;
     rcu_read_lock();
-    hlist_for_each_entry_rcu(node, &map->heads[hash_min(kcom_hash_string(key), ilog2(map->head_count))], node)
+    hlist_for_each_entry_rcu(node, &map->heads[kcom_hash_string(key) % map->head_count], node)
     {
         if(memcmp(node->data, key, node->key_size) == 0)
         {
@@ -513,7 +513,7 @@ int64_t kcom_maps_get_int64(KCOM_MAP* map, const char* key, int64_t default_val)
     }
     KCOM_HASH_NODE* node = NULL;
     rcu_read_lock();
-    hlist_for_each_entry_rcu(node, &map->heads[hash_min(kcom_hash_string(key), ilog2(map->head_count))], node)
+    hlist_for_each_entry_rcu(node, &map->heads[kcom_hash_string(key) % map->head_count], node)
     {
         if(node->data_size == sizeof(int64_t) && (memcmp(node->data, key, node->key_size) == 0))
         {
@@ -536,7 +536,7 @@ bool kcom_maps_exist(KCOM_MAP* map, const char* key)
     }
     KCOM_HASH_NODE* node = NULL;
     rcu_read_lock();
-    hlist_for_each_entry_rcu(node, &map->heads[hash_min(kcom_hash_string(key), ilog2(map->head_count))], node)
+    hlist_for_each_entry_rcu(node, &map->heads[kcom_hash_string(key) % map->head_count], node)
     {
         if(memcmp(node->data, key, node->key_size) == 0)
         {
@@ -557,7 +557,7 @@ bool kcom_maps_exist_value(KCOM_MAP* map, const char* key, const void* value, in
     }
     KCOM_HASH_NODE* node = NULL;
     rcu_read_lock();
-    hlist_for_each_entry_rcu(node, &map->heads[hash_min(kcom_hash_string(key), ilog2(map->head_count))], node)
+    hlist_for_each_entry_rcu(node, &map->heads[kcom_hash_string(key) % map->head_count], node)
     {
         if(memcmp(node->data, key, node->key_size) == 0
                 && node->data_size == value_size

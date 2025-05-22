@@ -1,10 +1,10 @@
 #include <linux/slab.h>
 #include <linux/module.h>
+#include <linux/delay.h>
 #include <linux/kthread.h>
 #include <linux/sched/task.h>
 
 #include "kcom_map.h"
-#include "kcom_crypto.h"
 #include "kcom_log.h"
 
 #define __UNIT_TEST__
@@ -14,46 +14,16 @@ static KCOM_MAP* map_1 = NULL;
 static KCOM_MAP* map_2 = NULL;
 static struct task_struct* threads_1[10];
 static struct task_struct* threads_2[10];
+static int test_count = 100000;
 
 static int thread_test_1(void* ctx)
 {
     KCOM_MAP* map = (KCOM_MAP*)ctx;
-    int i;
+    size_t i;
     char buf[16];
-    if(strcmp(get_current()->comm, "thread 1") == 0)
+    for(i = 0; i < test_count && !kthread_should_stop(); i++)
     {
-        const char* key = "0123456789012345";
-        const char* iv = "0123456789012345";
-        const char* buf_in = "0123456789012345";
-        //u8 buf_out[128] = {0};
-        u8* buf_out = kmalloc(128, GFP_KERNEL);
-
-        //int result_size = kcom_crypto_hash("md5", buf_in, strlen(buf_in), buf_out, sizeof(buf_out));
-        int result_size = kcom_crypto_encrypt("cbc(aes)", key, 16, iv, 16, buf_in, 16, buf_out, 128);
-        int str_size = 0;
-        char str_buf[256] = {0};
-        for(i = 0; i < result_size; i++)
-        {
-            str_size += snprintf(str_buf + str_size, sizeof(str_buf) - str_size, "%x ", buf_out[i]);
-        }
-        KLOG_I("result=%s", str_buf);
-        kfree(buf_out);
-    }
-    if(strcmp(get_current()->comm, "thread 9") == 0)
-    {
-        for(i = 0; i < 100000 && !kthread_should_stop(); i += 3)
-        {
-            snprintf(buf, sizeof(buf), "key%d", i);
-            kcom_maps_remove(map, buf);
-            //KLOG_I("removed,key=%s", buf);
-        }
-        KLOG_I("[1]add done,%s", get_current()->comm);
-        return 0;
-    }
-
-    for(i = 0; i < 100000 && !kthread_should_stop(); i++)
-    {
-        snprintf(buf, sizeof(buf), "key%d", i);
+        snprintf(buf, sizeof(buf), "key%zu", i);
         if(kcom_maps_get_int64(map, buf, -1) == -1)
         {
             KLOG_E("read failed,key=%s", buf);
@@ -67,18 +37,7 @@ static int thread_test_2(void* ctx)
 {
     KCOM_MAP* map = (KCOM_MAP*)ctx;
     int i;
-    if(strcmp(get_current()->comm, "thread 9") == 0)
-    {
-        for(i = 0; i < 100000 && !kthread_should_stop(); i += 3)
-        {
-            kcom_map_remove(map, i);
-            //KLOG_I("removed,key=%s", buf);
-        }
-        KLOG_I("[2]add done,%s", get_current()->comm);
-        return 0;
-    }
-
-    for(i = 0; i < 100000 && !kthread_should_stop(); i++)
+    for(i = 0; i < test_count && !kthread_should_stop(); i++)
     {
         if(kcom_map_get_int64(map, i, -1) != i)
         {
@@ -98,11 +57,18 @@ static int __init kcom_unit_test_init(void)
     map_2 = kcom_map_create(1024);
     char buf[16];
     size_t i;
-    for(i = 0; i < 100000; i++)
+    for(i = 0; i < test_count; i++)
     {
         snprintf(buf, sizeof(buf), "key%zu", i);
-        kcom_maps_add_int64(map_1, buf, i);
-        kcom_map_add_int64(map_2, i, i);
+        //KLOG_I("add %s to map_1",buf);
+        if(kcom_maps_add_int64(map_1, buf, i) == false)
+        {
+            KLOG_E("failed to add %zu to map_1", i);
+        }
+        if(kcom_map_add_int64(map_2, i, i) == false)
+        {
+            KLOG_E("failed to add %zu to map_2", i);
+        }
     }
     for(i = 0; i < sizeof(threads_1) / sizeof(threads_1[0]); i++)
     {

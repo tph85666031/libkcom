@@ -8,15 +8,16 @@ MODULE_OBJ = $(MODULE_SRC:c=o)
 obj-m += $(MODULE_NAME).o
 $(MODULE_NAME)-objs := $(MODULE_OBJ)
 
-all: 
+all:
 	@echo objs=$($(MODULE_NAME)-objs)
 	@echo cc=$(CC)
 	@-mkdir -p $(PWD)/out > /dev/null 2>&1
 	@-touch $(PWD)/out/Makefile > /dev/null 2>&1
+	@-ln -s $(PWD)/*.c $(PWD)/out > /dev/null 2>&1
 	make -C /lib/modules/$(shell uname -r)/build M=$(PWD)/out src=$(PWD) modules
 	cp $(PWD)/out/*.ko $(PWD)
 	cp $(PWD)/out/Module.symvers $(PWD)
-
+	
 clean:
 	make -C /lib/modules/$(shell uname -r)/build M=$(PWD)/out clean
 	-rm -rf $(PWD)/out
@@ -24,7 +25,8 @@ clean:
 	-rm $(PWD)/Module.symvers
 
 install:
-	make -C /lib/modules/$(shell uname -r)/build M=$(PWD)/out modules_install
+	@-mkdir /lib/modules/$(shell uname -r)/extra
+	make INSTALL_MOD_DIR=extra -C /lib/modules/$(shell uname -r)/build M=$(PWD)/out modules_install
 	depmod -a
 	insmod /lib/modules/$(shell uname -r)/extra/$(MODULE_NAME).ko
 

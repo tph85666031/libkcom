@@ -61,7 +61,7 @@ char* kcom_process_get_path_sleep(struct task_struct* task, char* buf, int buf_s
     rcu_read_unlock();
 #else
     rcu_read_lock();
-    exe_file = get_file_rcu(mm->exe_file);
+    exe_file = get_file_rcu(&mm->exe_file);
     rcu_read_unlock();
 #endif
 
