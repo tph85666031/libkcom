@@ -14,6 +14,7 @@ typedef struct
     struct genl_multicast_group group;
     struct genl_ops option[1];
     struct nla_policy policy[2];
+    void (*cb_on_recv)(int, const unsigned char*, int);//sender_id,data,data_size
 } KCOM_NETLINK_GENERIC_HANDLE;
 
 struct sock* kcom_netlink_open(int protocol_type, unsigned int group, void (*cb_on_recv)(struct sk_buff*))
@@ -99,7 +100,22 @@ int kcom_netlink_send_broadcast(struct sock* sk, int group, const void* data, in
 }
 EXPORT_SYMBOL(kcom_netlink_send_broadcast);
 
-void* kcom_netlink_generic_open(const char* name, int (*cb_on_recv)(struct sk_buff*, struct genl_info*))
+static int kcom_netlink_generic_cb(struct sk_buff* skb, struct genl_info* info)
+{
+    if(skb == NULL || info == NULL || info->family == NULL || info->attrs == NULL || info->attrs[KCOM_NETLINK_GENERIC_ATTR_BIN] == NULL)
+    {
+        return -EINVAL;
+    }
+
+    KCOM_NETLINK_GENERIC_HANDLE* handle = (KCOM_NETLINK_GENERIC_HANDLE*)info->family;
+    KLOG_I("family=%p", handle);
+    unsigned char* data = nla_data(info->attrs[KCOM_NETLINK_GENERIC_ATTR_BIN]);
+    int data_size = nla_len(info->attrs[KCOM_NETLINK_GENERIC_ATTR_BIN]);
+    handle->cb_on_recv(info->snd_portid, data, data_size);
+    return 0;
+}
+
+void* kcom_netlink_generic_open(const char* name, void (*cb_on_recv)(int, const unsigned char*, int))
 {
     KCOM_NETLINK_GENERIC_HANDLE* handle = (KCOM_NETLINK_GENERIC_HANDLE*)kzalloc(sizeof(KCOM_NETLINK_GENERIC_HANDLE), GFP_NOWAIT);
     if(handle == NULL)
@@ -110,7 +126,7 @@ void* kcom_netlink_generic_open(const char* name, int (*cb_on_recv)(struct sk_bu
     handle->policy[KCOM_NETLINK_GENERIC_ATTR_BIN].type = NLA_BINARY;
 
     handle->option[0].cmd = KCOM_NETLINK_GENERIC_CMD_BIN;
-    handle->option[0].doit = cb_on_recv;
+    handle->option[0].doit = kcom_netlink_generic_cb;
     handle->option[0].policy = handle->policy;
 
     strncpy(handle->family.name, name, sizeof(handle->family.name) - 1);
@@ -127,6 +143,7 @@ void* kcom_netlink_generic_open(const char* name, int (*cb_on_recv)(struct sk_bu
         kfree(handle);
         return NULL;
     }
+    KLOG_I("register family=%p", &handle->family);
 
     return handle;
 }
