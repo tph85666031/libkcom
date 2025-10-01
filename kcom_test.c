@@ -6,6 +6,7 @@
 
 #include "kcom_map.h"
 #include "kcom_log.h"
+#include "kcom_netlink.h"
 
 #define __UNIT_TEST__
 
@@ -46,6 +47,14 @@ static int thread_test_2(void* ctx)
     }
     KLOG_I("[2]read done,%s", get_current()->comm);
     return 0;
+}
+
+static void* netlink_handle = NULL;
+
+static void netlink_test_onrecv(int sender_id, const unsigned char* data, int data_size)
+{
+    KLOG_I("got message from netlink %d,data=%d:%s", sender_id, data_size, (char*)data);
+    kcom_netlink_generic_send(netlink_handle, sender_id, "test back", sizeof("test back"));
 }
 
 static int __init kcom_unit_test_init(void)
@@ -94,6 +103,8 @@ static int __init kcom_unit_test_init(void)
     }
 
     KLOG_I("init done");
+    netlink_handle = kcom_netlink_generic_open("generic_test", netlink_test_onrecv);
+    KLOG_I("netlink init done,netlink_handle=%p", netlink_handle);
     return 0;
 }
 
@@ -121,6 +132,7 @@ static void __exit kcom_unit_test_exit(void)
     }
     kcom_map_destroy(map_1);
     kcom_map_destroy(map_2);
+    kcom_netlink_generic_close(netlink_handle);
 }
 
 module_init(kcom_unit_test_init);

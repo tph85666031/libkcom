@@ -102,13 +102,19 @@ EXPORT_SYMBOL(kcom_netlink_send_broadcast);
 
 static int kcom_netlink_generic_cb(struct sk_buff* skb, struct genl_info* info)
 {
+    KLOG_D("got netlink message");
     if(skb == NULL || info == NULL || info->family == NULL || info->attrs == NULL || info->attrs[KCOM_NETLINK_GENERIC_ATTR_BIN] == NULL)
     {
         return -EINVAL;
     }
 
     KCOM_NETLINK_GENERIC_HANDLE* handle = (KCOM_NETLINK_GENERIC_HANDLE*)info->family;
-    KLOG_I("family=%p", handle);
+    if(handle->cb_on_recv==NULL)
+    {
+        return -EINVAL;
+    }
+    
+    KLOG_D("family=%p", handle);
     unsigned char* data = nla_data(info->attrs[KCOM_NETLINK_GENERIC_ATTR_BIN]);
     int data_size = nla_len(info->attrs[KCOM_NETLINK_GENERIC_ATTR_BIN]);
     handle->cb_on_recv(info->snd_portid, data, data_size);
@@ -124,7 +130,7 @@ void* kcom_netlink_generic_open(const char* name, void (*cb_on_recv)(int, const 
     }
 
     handle->policy[KCOM_NETLINK_GENERIC_ATTR_BIN].type = NLA_BINARY;
-
+    handle->cb_on_recv = cb_on_recv;
     handle->option[0].cmd = KCOM_NETLINK_GENERIC_CMD_BIN;
     handle->option[0].doit = kcom_netlink_generic_cb;
     handle->option[0].policy = handle->policy;
@@ -143,7 +149,7 @@ void* kcom_netlink_generic_open(const char* name, void (*cb_on_recv)(int, const 
         kfree(handle);
         return NULL;
     }
-    KLOG_I("register family=%p", &handle->family);
+    KLOG_D("register family=%p", &handle->family);
 
     return handle;
 }
