@@ -54,7 +54,7 @@ static void* netlink_handle = NULL;
 static void netlink_test_onrecv(int sender_id, const unsigned char* data, int data_size)
 {
     KLOG_I("got message from netlink %d,data=%d:%s", sender_id, data_size, (char*)data);
-    kcom_netlink_generic_send(netlink_handle, sender_id, "test back", sizeof("test back"));
+    kcom_netlink_generic_send(netlink_handle, sender_id, "message from kernel", sizeof("message from kernel"));
 }
 
 static int __init kcom_unit_test_init(void)

@@ -109,11 +109,11 @@ static int kcom_netlink_generic_cb(struct sk_buff* skb, struct genl_info* info)
     }
 
     KCOM_NETLINK_GENERIC_HANDLE* handle = (KCOM_NETLINK_GENERIC_HANDLE*)info->family;
-    if(handle->cb_on_recv==NULL)
+    if(handle->cb_on_recv == NULL)
     {
         return -EINVAL;
     }
-    
+
     KLOG_D("family=%p", handle);
     unsigned char* data = nla_data(info->attrs[KCOM_NETLINK_GENERIC_ATTR_BIN]);
     int data_size = nla_len(info->attrs[KCOM_NETLINK_GENERIC_ATTR_BIN]);
@@ -173,8 +173,9 @@ int kcom_netlink_generic_send(void* handle, int remote_id, const void* data, int
     }
     const struct genl_family* family = &((KCOM_NETLINK_GENERIC_HANDLE*)handle)->family;
     struct sk_buff* skb = genlmsg_new(nla_total_size(data_size), GFP_NOWAIT);
-    genlmsg_put(skb, 0, 0, family, 0, KCOM_NETLINK_GENERIC_CMD_BIN);
+    void* msg_head = genlmsg_put(skb, remote_id, 0, family, 0, KCOM_NETLINK_GENERIC_CMD_BIN);
     nla_put(skb, KCOM_NETLINK_GENERIC_ATTR_BIN, data_size, data);
+    genlmsg_end(skb, msg_head);
 
     return genlmsg_unicast(&init_net, skb, remote_id);
 }
@@ -188,8 +189,9 @@ int kcom_netlink_generic_send_broadcast(void* handle, int group, const void* dat
     }
     const struct genl_family* family = &((KCOM_NETLINK_GENERIC_HANDLE*)handle)->family;
     struct sk_buff* skb = genlmsg_new(nla_total_size(data_size), GFP_NOWAIT);
-    genlmsg_put(skb, 0, 0, family, 0, KCOM_NETLINK_GENERIC_CMD_BIN);
+    void* msg_head = genlmsg_put(skb, 0, 0, family, 0, KCOM_NETLINK_GENERIC_CMD_BIN);
     nla_put(skb, KCOM_NETLINK_GENERIC_ATTR_BIN, data_size, data);
+    genlmsg_end(skb, msg_head);
 
     return genlmsg_multicast(family, skb, 0, group, GFP_NOWAIT);
 }
