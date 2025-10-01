@@ -53,7 +53,7 @@ int kcom_netlink_send(struct sock* sk, int remote_id, const void* data, int data
         return -2;
     }
 
-    msg = nlmsg_put(skb, 0, 0, NLMSG_DONE, data_size, 0);
+    msg = nlmsg_put(skb, remote_id, 0, NLMSG_DONE, data_size, 0);
     if(msg == NULL)
     {
         nlmsg_free(skb);
