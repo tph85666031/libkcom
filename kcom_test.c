@@ -8,8 +8,6 @@
 #include "kcom_log.h"
 #include "kcom_netlink.h"
 
-#define __UNIT_TEST__
-
 #ifdef __UNIT_TEST__
 static KCOM_MAP* map_1 = NULL;
 static KCOM_MAP* map_2 = NULL;

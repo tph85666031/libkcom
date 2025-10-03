@@ -135,7 +135,7 @@ void* kcom_netlink_generic_open(const char* name, void (*cb_on_recv)(int, const 
     handle->option[0].doit = kcom_netlink_generic_cb;
     handle->option[0].policy = handle->policy;
 
-    strncpy(handle->family.name, name, sizeof(handle->family.name) - 1);
+    strscpy(handle->family.name, name, sizeof(handle->family.name));
     handle->family.version = 1;
     handle->family.maxattr = 2;
     handle->family.module = THIS_MODULE;

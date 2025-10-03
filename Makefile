@@ -10,7 +10,6 @@ $(MODULE_NAME)-objs := $(MODULE_OBJ)
 
 all:
 	@echo objs=$($(MODULE_NAME)-objs)
-	@echo cc=$(CC)
 	@-mkdir -p $(PWD)/out > /dev/null 2>&1
 	@-touch $(PWD)/out/Makefile > /dev/null 2>&1
 	@-ln -s $(PWD)/*.c $(PWD)/out > /dev/null 2>&1
