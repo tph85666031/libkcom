@@ -10,22 +10,22 @@ $(MODULE_NAME)-objs := $(MODULE_OBJ)
 
 all:
 	@echo objs=$($(MODULE_NAME)-objs)
-	@-mkdir -p $(PWD)/out > /dev/null 2>&1
-	@-touch $(PWD)/out/Makefile > /dev/null 2>&1
-	@-ln -s $(PWD)/*.c $(PWD)/out > /dev/null 2>&1
-	make -C /lib/modules/$(shell uname -r)/build M=$(PWD)/out src=$(PWD) modules
-	cp $(PWD)/out/*.ko $(PWD)
-	cp $(PWD)/out/Module.symvers $(PWD)
+	@-mkdir -p $(PWD)/tmp > /dev/null 2>&1
+	@-touch $(PWD)/tmp/Makefile > /dev/null 2>&1
+	@-ln -s $(PWD)/*.c $(PWD)/tmp > /dev/null 2>&1
+	make -C /lib/modules/$(shell uname -r)/build M=$(PWD)/tmp src=$(PWD) modules
+	cp $(PWD)/tmp/*.ko $(PWD)
+	cp $(PWD)/tmp/Module.symvers $(PWD)
 	
 clean:
-	make -C /lib/modules/$(shell uname -r)/build M=$(PWD)/out clean
-	-rm -rf $(PWD)/out
+	make -C /lib/modules/$(shell uname -r)/build M=$(PWD)/tmp clean
+	-rm -rf $(PWD)/tmp
 	-rm $(PWD)/*.ko
 	-rm $(PWD)/Module.symvers
 
 install:
 	@-mkdir /lib/modules/$(shell uname -r)/extra
-	make INSTALL_MOD_DIR=extra -C /lib/modules/$(shell uname -r)/build M=$(PWD)/out modules_install
+	make INSTALL_MOD_DIR=extra -C /lib/modules/$(shell uname -r)/build M=$(PWD)/tmp modules_install
 	depmod -a
 	insmod /lib/modules/$(shell uname -r)/extra/$(MODULE_NAME).ko
 
